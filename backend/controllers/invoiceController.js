@@ -1,129 +1,116 @@
+const asyncHandler = require('express-async-handler');
 const Invoice = require('../models/invoiceModel');
 const Booking = require('../models/bookingModel');
-// const catchAsync = require('../utils/catchAsync');
-// const AppError = require('../utils/appError');
 
-// Thay thế catchAsync bằng try...catch nếu bạn chưa có
-const catchAsync = fn => {
-  return (req, res, next) => {
-    fn(req, res, next).catch(next);
-  };
-};
-
-// Use Case: Generate Guest Invoice / Generate Financial Invoice
-exports.createInvoiceFromBooking = catchAsync(async (req, res, next) => {
-  const { bookingId } = req.body;
+/**
+ * @desc    Tạo hóa đơn cho một booking (thường được gọi tự động)
+ * @route   POST /api/bookings/:bookingId/invoice
+ * @access  Private (Receptionist, Accountant)
+ */
+const generateInvoiceForBooking = asyncHandler(async (req, res, next) => {
+  const { bookingId } = req.params;
   
-  if (!bookingId) {
-    return res.status(400).json({ status: 'fail', message: 'Booking ID is required'});
-  }
-
-  const booking = await Booking.findById(bookingId).populate('room');
+  const booking = await Booking.findById(bookingId);
   if (!booking) {
-    return res.status(404).json({ status: 'fail', message: 'No booking found'});
+    return res.status(404).json({ message: 'Không tìm thấy booking'});
   }
-
-  // SỬA: Tính toán tổng tiền thực tế từ booking
-  // Giả sử room đã được populate và có roomType lồng nhau với basePrice
-  // Bạn cần đảm bảo logic populate này
-  // const room = await Room.findById(booking.room).populate('roomType'); (Nếu chưa populate)
-  // const pricePerNight = booking.room.roomType.basePrice;
-  // const nights = Math.ceil((new Date(booking.checkOutDate) - new Date(booking.checkInDate)) / (1000 * 60 * 60 * 24));
-  // const totalAmount = pricePerNight * nights;
-
-  const totalAmount = booking.totalPrice; // Lấy từ bookingModel nếu bạn đã tính sẵn
+  
+  const existingInvoice = await Invoice.findOne({ booking: bookingId });
+  if (existingInvoice) {
+      return res.status(400).json({ message: 'Hóa đơn đã tồn tại cho booking này' });
+  }
 
   const newInvoice = await Invoice.create({
     booking: bookingId,
-    totalAmount: totalAmount,
-    // SỬA: Xóa trường 'guest' vì nó không có trong invoiceModel
+    totalAmount: booking.totalPrice, // Lấy từ bookingModel
+    issueDate: Date.now(),
+    paymentStatus: 'pending' // Mặc định từ invoiceModel
   });
 
-  res.status(201).json({
-    status: 'success',
-    data: {
-      invoice: newInvoice,
-    },
-  });
+  res.status(201).json(newInvoice);
 });
 
-// Use Case: Record Payment
-exports.recordPayment = catchAsync(async (req, res, next) => {
-  const { paymentMethod } = req.body; // Chỉ cần phương thức thanh toán
-
-  const invoice = await Invoice.findById(req.params.id);
-
-  if (!invoice) {
-    return res.status(404).json({ status: 'fail', message: 'No invoice found'});
-  }
+/**
+ * @desc    Lấy tất cả hóa đơn (Lịch sử giao dịch)
+ * @route   GET /api/invoices
+ * @access  Private (Accountant, Manager)
+ */
+const getAllInvoices = asyncHandler(async (req, res, next) => {
+  const filter = {};
+  if (req.query.status) filter.paymentStatus = req.query.status;
+  if (req.query.bookingId) filter.booking = req.query.bookingId;
+  // TODO: Thêm filter theo customerId (yêu cầu populate lồng nhau)
+  if (req.query.fromDate) filter.issueDate = { ...filter.issueDate, $gte: new Date(req.query.fromDate) };
+  if (req.query.toDate) filter.issueDate = { ...filter.issueDate, $lte: new Date(req.query.toDate) };
   
-  // SỬA: Dùng 'paymentStatus' (từ model) thay vì 'status'
-  invoice.paymentStatus = 'paid';
-  invoice.paymentMethod = paymentMethod;
-
-  // Lưu ý: 2 trường này không có trong model, Mongoose (strict) sẽ bỏ qua
-  // Nếu muốn lưu, bạn phải thêm vào invoiceModel.js
-  // invoice.paidAmount = invoice.totalAmount;
-  // invoice.paymentDate = Date.now();
-  
-  await invoice.save();
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      invoice,
-    },
-  });
-});
-
-// Use Case: View Transaction History
-exports.getTransactionHistory = catchAsync(async (req, res, next) => {
-  const invoices = await Invoice.find()
-    // SỬA: Dùng populate lồng nhau (nested populate)
+  const invoices = await Invoice.find(filter)
     .populate({
-      path: 'booking', // 1. Populate trường 'booking'
-      populate: {
-        path: 'guest', // 2. Populate trường 'guest' BÊN TRONG booking
-        select: 'fullName email' // Chỉ lấy các trường cần thiết
-      }
+      path: 'booking',
+      select: 'guest room checkInDate checkOutDate',
+      populate: { path: 'guest', select: 'fullName' }
     })
-  .sort('-createdAt');
+    .sort('-issueDate');
 
- res.status(200).json({
-  status: 'success',
-  results: invoices.length,
-  data: {
-   invoices,
-  },
- });
+ res.status(200).json(invoices);
 });
 
-// Lấy 1 hóa đơn
-exports.getInvoice = catchAsync(async (req, res, next) => {
-  const invoice = await Invoice.findById(req.params.id)
-      // SỬA: Dùng populate lồng nhau (nested populate)
+/**
+ * @desc    Lấy chi tiết 1 hóa đơn
+ * @route   GET /api/invoices/:invoiceId
+ * @access  Private (Accountant, Manager, Receptionist)
+ */
+const getInvoiceById = asyncHandler(async (req, res, next) => {
+  const invoice = await Invoice.findById(req.params.invoiceId)
       .populate({
         path: 'booking',
         populate: [
-          {
-            path: 'guest', // Populate 'guest' bên trong 'booking'
-            select: 'fullName email phoneNumber'
-          },
-          {
-            path: 'room', // Populate 'room' bên trong 'booking'
-            select: 'roomNumber'
-          }
+          { path: 'guest' },
+          { path: 'room', populate: { path: 'roomType' } }
         ]
       });
-
   if (!invoice) {
-    return res.status(404).json({ status: 'fail', message: 'No invoice found'});
+    return res.status(404).json({ message: 'Không tìm thấy hóa đơn'});
   }
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      invoice,
-    },
-  });
+  res.status(200).json(invoice);
 });
+
+/**
+ * @desc    Lấy hóa đơn (view của khách) bằng Booking ID
+ * @route   GET /api/invoices/guest/:bookingId
+ * @access  Private (Accountant, Receptionist)
+ */
+const getGuestInvoiceView = asyncHandler(async (req, res, next) => {
+    const invoice = await Invoice.findOne({ booking: req.params.bookingId })
+        .populate({
+            path: 'booking',
+            populate: [ { path: 'guest' }, { path: 'room' } ]
+        });
+    if (!invoice) {
+        return res.status(404).json({ message: 'Không tìm thấy hóa đơn cho booking này'});
+    }
+    res.json(invoice);
+});
+
+/**
+ * @desc    Lấy hóa đơn (view tài chính) bằng Booking ID
+ * @route   GET /api/invoices/financial/:bookingId
+ * @access  Private (Accountant)
+ */
+const getFinancialInvoiceView = asyncHandler(async (req, res, next) => {
+    // Tạm thời giống hệt getGuestInvoiceView
+    // Có thể populate thêm chi tiết (vd: createdBy) nếu cần
+    const invoice = await Invoice.findOne({ booking: req.params.bookingId })
+        .populate('booking');
+    if (!invoice) {
+        return res.status(404).json({ message: 'Không tìm thấy hóa đơn cho booking này'});
+    }
+    res.json(invoice);
+});
+
+module.exports = {
+    generateInvoiceForBooking,
+    getAllInvoices,
+    getInvoiceById,
+    getGuestInvoiceView,
+    getFinancialInvoiceView
+};

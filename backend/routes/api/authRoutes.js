@@ -1,14 +1,25 @@
+// routes/api/employeeRoutes.js
 const express = require('express');
 const router = express.Router();
 const {
-    registerUser,
-    loginUser,
-    getMe,
-} = require('../../controllers/authController'); // Sửa đường dẫn
-const { protect } = require('../../middleware/authMiddleware'); // Sửa đường dẫn
+    createEmployee,
+    getAllEmployees,
+    getEmployeeById,
+    updateEmployee,
+    deleteEmployee
+} = require('../../controllers/employeeController');
+const { protect, authorize } = require('../../middleware/authMiddleware');
 
-router.post('/register', registerUser);
-router.post('/login', loginUser);
-router.get('/me', protect, getMe);
+// Chỉ Manager mới có quyền truy cập
+router.use(protect, authorize('manager'));
+
+router.route('/')
+    .post(createEmployee)
+    .get(getAllEmployees);
+
+router.route('/:id')
+    .get(getEmployeeById)
+    .put(updateEmployee)
+    .delete(deleteEmployee);
 
 module.exports = router;

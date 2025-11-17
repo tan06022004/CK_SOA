@@ -1,23 +1,25 @@
+// routes/api/reportRoutes.js
 const express = require('express');
-const reportController = require('../../controllers/reportController');
-// THAY ĐỔI: Import middleware mới
+const router = express.Router();
+const {
+    generateOccupancyReport,
+    generateRevenueReport,
+    listGeneratedReports,
+    getGeneratedReportById,
+    exportComprehensiveReport
+} = require('../../controllers/reportController');
 const { protect, authorize } = require('../../middleware/authMiddleware');
 
-const router = express.Router();
+// Chỉ Quản lý và Kế toán
+router.use(protect, authorize('manager', 'accountant'));
 
-// THAY ĐỔI: Áp dụng bảo vệ cho tất cả routes bên dưới
-// 1. Yêu cầu đăng nhập
-router.use(protect);
-// 2. Yêu cầu là Quản lý hoặc Kế toán
-router.use(authorize('manager', 'accountant'));
+// Tạo báo cáo (Generate)
+router.get('/occupancy', generateOccupancyReport);
+router.get('/revenue', generateRevenueReport);
+router.get('/comprehensive/export', exportComprehensiveReport);
 
-// Use Case: Generate Revenue Report
-router.get('/revenue', reportController.getRevenueReport);
-
-// Use Case: View Room Occupancy Report
-router.get('/occupancy', reportController.getRoomOccupancyReport);
-
-// Use Case: View Revenue Dashboard
-router.get('/dashboard', reportController.getDashboardStats);
+// Xem báo cáo đã lưu (List/Get)
+router.get('/', listGeneratedReports);
+router.get('/:reportId', getGeneratedReportById);
 
 module.exports = router;

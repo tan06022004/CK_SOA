@@ -1,39 +1,23 @@
+// routes/api/invoiceRoutes.js
 const express = require('express');
-const invoiceController = require('../../controllers/invoiceController');
-// THAY ĐỔI: Import middleware mới
+const router = express.Router();
+const {
+    getAllInvoices,
+    getInvoiceById,
+    getGuestInvoiceView,
+    getFinancialInvoiceView
+} = require('../../controllers/invoiceController');
 const { protect, authorize } = require('../../middleware/authMiddleware');
 
-const router = express.Router();
+// Kế toán, Lễ tân, Quản lý
+const R_M_A = ['receptionist', 'manager', 'accountant'];
+router.use(protect, authorize(...R_M_A));
 
-// THAY ĐỔI: Yêu cầu đăng nhập cho TẤT CẢ routes hóa đơn
-router.use(protect);
+router.route('/').get(getAllInvoices);
+router.route('/:invoiceId').get(getInvoiceById);
 
-// Use Case: View Transaction History & Generate Invoice
-router.route('/')
-  // THAY ĐỔI: Bảo vệ route
-  .get(
-    authorize('accountant', 'receptionist', 'manager'),
-    invoiceController.getTransactionHistory
-  )
-  // THAY ĐỔI: Bảo vệ route
-  .post(
-    authorize('receptionist', 'manager'),
-    invoiceController.createInvoiceFromBooking
-  );
-
-// THAY ĐỔI: Bảo vệ route
-router.route('/:id').get(
-  authorize('accountant', 'receptionist', 'manager'),
-  invoiceController.getInvoice
-);
-
-// Use Case: Record Payment
-router
-  .route('/:id/payment')
-  // THAY ĐỔI: Bảo vệ route (CHỈ KẾ TOÁN)
-  .post(
-    authorize('accountant'),
-    invoiceController.recordPayment
-  );
+// Routes xem theo Booking ID
+router.get('/guest/:bookingId', getGuestInvoiceView);
+router.get('/financial/:bookingId', authorize('accountant'), getFinancialInvoiceView); // View tài chính chỉ cho Kế toán
 
 module.exports = router;

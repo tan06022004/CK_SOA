@@ -1,24 +1,23 @@
+// routes/api/guestRoutes.js
 const express = require('express');
-const guestController = require('../../controllers/guestController');
-// THAY ĐỔI: Import middleware mới
+const router = express.Router();
+const {
+    getAllGuests,
+    getGuestById,
+    createGuest,
+    updateGuest
+} = require('../../controllers/guestController');
 const { protect, authorize } = require('../../middleware/authMiddleware');
 
-const router = express.Router();
+// Chỉ Lễ tân hoặc Quản lý
+router.use(protect, authorize('receptionist', 'manager'));
 
-// THAY ĐỔI: Áp dụng bảo vệ cho tất cả routes bên dưới
-// 1. Yêu cầu đăng nhập
-router.use(protect);
-// 2. Yêu cầu là Lễ tân hoặc Quản lý
-router.use(authorize('receptionist', 'manager'));
+router.route('/')
+    .get(getAllGuests)
+    .post(createGuest);
 
-router
-  .route('/')
-  .get(guestController.getAllGuests)
-  .post(guestController.createGuest);
-
-router
-  .route('/:id')
-  .get(guestController.getGuest)
-  .patch(guestController.updateGuest);
+router.route('/:guestId') // Khớp với param 'guestId' trong Doc
+    .get(getGuestById)
+    .put(updateGuest); // Đổi sang PUT
 
 module.exports = router;

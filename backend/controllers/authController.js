@@ -1,6 +1,6 @@
 const asyncHandler = require('express-async-handler');
-const User = require('../models/userModel'); // Sửa đường dẫn
 const jwt = require('jsonwebtoken');
+const User = require('../models/userModel');
 
 // Hàm helper để tạo token
 const generateToken = (id) => {
@@ -9,72 +9,43 @@ const generateToken = (id) => {
     });
 };
 
-// @desc    Đăng ký người dùng mới
-// @route   POST /api/auth/register
-// @access  Public
-const registerUser = asyncHandler(async (req, res) => {
-    const { name, email, password, role } = req.body; // Thêm role
-
-    // 1. Kiểm tra xem email đã tồn tại chưa
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-        res.status(400); // Bad Request
-        throw new Error('User already exists');
-    }
-
-    // 2. Tạo user mới
-    const user = await User.create({
-        name,
-        email,
-        password,
-        role: role || 'guest', // Nếu không cung cấp role, mặc định là customer
-    });
-
-    // 3. Trả về thông tin user và token
-    if (user) {
-        res.status(201).json({
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            token: generateToken(user._id),
-        });
-    } else {
-        res.status(400);
-        throw new Error('Invalid user data');
-    }
-});
-
-// @desc    Đăng nhập (xác thực) người dùng
-// @route   POST /api/auth/login
-// @access  Public
+/**
+ * @desc    Đăng nhập (xác thực) người dùng
+ * @route   POST /api/auth/login
+ * @access  Public
+ */
 const loginUser = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password } = req.body; // Dùng email theo userModel
 
-    // 1. Tìm user bằng email
-    const user = await User.findOne({ email });
+    if (!email || !password) {
+        res.status(400);
+        throw new Error('Vui lòng cung cấp email và mật khẩu');
+    }
 
-    // 2. Kiểm tra user và mật khẩu
+    const user = await User.findOne({ email }).select('+password');
+
     if (user && (await user.matchPassword(password))) {
         res.json({
             _id: user._id,
-            name: user.name,
+            name: user.name, // Khớp với userModel
             email: user.email,
             role: user.role,
             token: generateToken(user._id),
         });
     } else {
-        res.status(401); // Unauthorized
-        throw new Error('Invalid email or password');
+        res.status(401);
+        throw new Error('Email hoặc mật khẩu không hợp lệ');
     }
 });
 
-// @desc    Lấy thông tin profile của user đang đăng nhập
-// @route   GET /api/auth/me
-// @access  Private (Cần token)
-const getMe = asyncHandler(async (req, res) => {
+/**
+ * @desc    Lấy thông tin profile của user đang đăng nhập
+ * @route   GET /api/auth/profile
+ * @access  Private
+ */
+const getProfile = asyncHandler(async (req, res) => {
     // req.user được gán từ middleware 'protect'
-    const user = req.user; 
+    const user = await User.findById(req.user.id).select('-password');
     
     if (user) {
         res.json({
@@ -85,8 +56,23 @@ const getMe = asyncHandler(async (req, res) => {
         });
     } else {
         res.status(404);
-        throw new Error('User not found');
+        throw new Error('Không tìm thấy người dùng');
     }
 });
 
-module.exports = { registerUser, loginUser, getMe };
+/**
+ * @desc    Đăng xuất người dùng
+ * @route   POST /api/auth/logout
+ * @access  Private
+ */
+const logoutUser = asyncHandler(async (req, res) => {
+  // Với JWT, client chỉ cần xóa token.
+  // Nếu dùng cookie, bạn sẽ xóa cookie tại đây.
+  res.status(200).json({ message: 'Đăng xuất thành công' });
+});
+
+module.exports = { 
+  loginUser, 
+  getProfile, 
+  logoutUser
+};

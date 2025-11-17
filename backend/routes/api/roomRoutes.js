@@ -2,17 +2,40 @@
 const express = require('express');
 const router = express.Router();
 const {
-  createRoom, getAllRooms, getRoomById, updateRoom, deleteRoom
+    getAllRooms,
+    getRoomById,
+    createRoom,
+    updateRoomInfo,
+    updateRoomStatus,
+    searchAvailableRooms,
+    getCleaningRooms,
+    getMaintenanceRooms
 } = require('../../controllers/roomController');
+// Lấy hàm từ dashboardController
+const { getRealtimeRoomStatus } = require('../../controllers/dashboardController');
 const { protect, authorize } = require('../../middleware/authMiddleware');
 
-router.route('/')
-  .post(protect, authorize('manager'), createRoom)
-  .get(getAllRooms);
+// Routes công khai (hoặc cho mọi nhân viên đã đăng nhập)
+router.get('/', protect, getAllRooms);
+router.get('/:roomId', protect, getRoomById);
 
-router.route('/:id')
-  .get(getRoomById)
-  .put(protect, authorize('manager', 'receptionist'), updateRoom)
-  .delete(protect, authorize('manager'), deleteRoom);
+// Routes cho Lễ tân
+router.get('/available', protect, authorize('receptionist'), searchAvailableRooms);
+
+// Routes cho Buồng phòng
+router.get('/cleaning', protect, authorize('housekeeper'), getCleaningRooms);
+
+// Routes cho Bảo trì
+router.get('/maintenance', protect, authorize('maintenance', 'receptionist'), getMaintenanceRooms);
+
+// Routes cho Dashboard (Lễ tân, Quản lý)
+router.get('/status/realtime', protect, authorize('receptionist', 'manager'), getRealtimeRoomStatus);
+
+// Route cập nhật trạng thái (Nhiều vai trò)
+router.put('/:roomId/status', protect, authorize('receptionist', 'housekeeper', 'maintenance'), updateRoomStatus);
+
+// Routes chỉ cho Quản lý
+router.post('/', protect, authorize('manager'), createRoom);
+router.put('/:roomId', protect, authorize('manager'), updateRoomInfo); // Cập nhật thông tin
 
 module.exports = router;

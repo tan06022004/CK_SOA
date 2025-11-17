@@ -1,101 +1,117 @@
+const asyncHandler = require('express-async-handler');
 const Maintenance = require('../models/maintenanceModel');
 const Room = require('../models/roomModel');
-// const catchAsync = require('../utils/catchAsync');
-// const AppError = require('../utils/appError');
 
-// Thay thế catchAsync bằng try...catch nếu bạn chưa có
-const catchAsync = fn => {
-  return (req, res, next) => {
-    fn(req, res, next).catch(next);
-  };
-};
-
-// Use Case: Report Maintenance Issue
-exports.createMaintenanceRequest = catchAsync(async (req, res, next) => {
-  const { room, issueDescription, priority } = req.body;
+/**
+ * @desc    Báo cáo sự cố bảo trì
+ * @route   POST /api/maintenance/issues
+ * @access  Private (Housekeeping, Receptionist, Manager)
+ */
+const reportMaintenanceIssue = asyncHandler(async (req, res, next) => {
+  const { roomId, description, priority } = req.body;
 
   const newRequest = await Maintenance.create({
-    room,
-    issueDescription,
+    room: roomId,
+    issueDescription: description, // Khớp với model
     priority,
-    reportedBy: req.user.id, // Giả sử đã có middleware bảo vệ gán req.user
+    reportedBy: req.user.id,
   });
   
-  // Logic cập nhật trạng thái phòng đã nằm trong Model
-  res.status(201).json({
-    status: 'success',
-    data: {
-      request: newRequest,
-    },
-  });
+  // KHÔNG CẦN CẬP NHẬT TRẠNG THÁI PHÒNG
+  // maintenanceModel có pre-save hook tự động làm việc này.
+  
+  res.status(201).json(newRequest);
 });
 
-// Lấy tất cả yêu cầu bảo trì (cho Maintenance Staff, Manager)
-exports.getAllMaintenanceRequests = catchAsync(async (req, res, next) => {
-  // Lọc theo trạng thái (vd: chỉ lấy 'reported', 'in_progress')
-  const filter = req.query.status ? { status: req.query.status } : {};
+/**
+ * @desc    Lấy tất cả yêu cầu bảo trì
+ * @route   GET /api/maintenance/requests
+ * @access  Private (Maintenance, Manager)
+ */
+const getAllMaintenanceRequests = asyncHandler(async (req, res, next) => {
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+  if (req.query.roomId) filter.room = req.query.roomId;
+  if (req.query.assignedToUserId) filter.assignedTo = req.query.assignedToUserId;
 
-  const requests = await Maintenance.find(filter).sort('-createdAt');
+  const requests = await Maintenance.find(filter)
+    .populate('room', 'roomNumber floor')
+    .populate('reportedBy', 'name')
+    .populate('assignedTo', 'name')
+    .sort('-createdAt');
 
-  res.status(200).json({
-    status: 'success',
-    results: requests.length,
-    data: {
-      requests,
-    },
-  });
+  res.status(200).json(requests);
 });
 
-// Use Case: Handle Maintenance Request / Update Maintenance Progress
-exports.updateMaintenanceRequest = catchAsync(async (req, res, next) => {
-  // Chỉ cho phép cập nhật status hoặc assignedTo
-  const { status, assignedTo } = req.body;
+/**
+ * @desc    Lấy chi tiết 1 yêu cầu bảo trì
+ * @route   GET /api/maintenance/requests/:requestId
+ * @access  Private (Maintenance, Manager)
+ */
+const getMaintenanceRequestById = asyncHandler(async (req, res, next) => {
+  const request = await Maintenance.findById(req.params.requestId);
+  if (!request) {
+    res.status(404);
+    throw new Error('Không tìm thấy yêu cầu bảo trì');
+  }
+  res.json(request);
+});
 
+/**
+ * @desc    Cập nhật yêu cầu bảo trì (gán việc, trạng thái)
+ * @route   PUT /api/maintenance/:requestId
+ * @access  Private (Maintenance, Manager)
+ */
+const updateMaintenanceRequest = asyncHandler(async (req, res, next) => {
+  // Ưu tiên các trường trong model
+  const { status, assignedTo } = req.body; 
+  // 'progressNotes' không có trong model
+
+  const updateData = {};
+  if (status) updateData.status = status;
+  if (assignedTo) updateData.assignedTo = assignedTo;
+  
   const request = await Maintenance.findByIdAndUpdate(
-    req.params.id,
-    { status, assignedTo },
+    req.params.requestId,
+    updateData,
     { new: true, runValidators: true }
   );
 
   if (!request) {
-    // return next(new AppError('No maintenance request found with that ID', 404));
-    return res.status(404).json({ status: 'fail', message: 'No maintenance request found'});
+    res.status(404);
+    throw new Error('Không tìm thấy yêu cầu bảo trì');
   }
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      request,
-    },
-  });
+  res.status(200).json(request);
 });
 
-// Use Case: Complete Maintenance Task
-exports.completeMaintenanceTask = catchAsync(async (req, res, next) => {
-  const request = await Maintenance.findById(req.params.id);
-
+/**
+ * @desc    Hoàn thành tác vụ bảo trì
+ * @route   PUT /api/maintenance/:requestId/complete
+ * @access  Private (Maintenance, Manager)
+ */
+const completeMaintenanceTask = asyncHandler(async (req, res, next) => {
+  const request = await Maintenance.findById(req.params.requestId);
   if (!request) {
-    // return next(new AppError('No maintenance request found with that ID', 404));
-    return res.status(404).json({ status: 'fail', message: 'No maintenance request found'});
+    res.status(404);
+    throw new Error('Không tìm thấy yêu cầu bảo trì');
   }
 
   request.status = 'completed';
   request.completedAt = Date.now();
+  // 'completionNotes' không có trong model
   await request.save();
 
-  // CẬP NHẬT TRẠNG THÁI PHÒNG:
-  // Giả sử sau khi bảo trì xong, phòng cần được dọn dẹp
-  // Nếu quy trình là: Sửa xong -> Dọn dẹp -> Sẵn sàng
-  // thì nên set status là 'cleaning'
-  // Nếu sửa xong là sẵn sàng luôn, thì set 'available'
-  
-  // TODO: Cân nhắc trạng thái phòng chính xác (available hoặc cleaning)
-  await Room.findByIdAndUpdate(request.room, { status: 'available' });
+  // Cập nhật trạng thái phòng (Model không tự làm việc này khi complete)
+  // Giả sử sửa xong cần dọn dẹp
+  await Room.findByIdAndUpdate(request.room, { status: 'dirty' });
 
-  res.status(200).json({
-    status: 'success',
-    data: {
-      request,
-    },
-  });
+  res.status(200).json(request);
 });
+
+module.exports = {
+  reportMaintenanceIssue,
+  getAllMaintenanceRequests,
+  getMaintenanceRequestById,
+  updateMaintenanceRequest,
+  completeMaintenanceTask,
+};
