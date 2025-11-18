@@ -17,8 +17,8 @@ const { protect, authorize } = require('../../middleware/authMiddleware');
 
 // Routes công khai (hoặc cho mọi nhân viên đã đăng nhập)
 router.get('/', protect, getAllRooms);
-router.get('/:roomId', protect, getRoomById);
 
+// Static routes MUST come before dynamic routes
 // Routes cho Lễ tân
 router.get('/available', protect, authorize('receptionist'), searchAvailableRooms);
 
@@ -30,6 +30,9 @@ router.get('/maintenance', protect, authorize('maintenance', 'receptionist'), ge
 
 // Routes cho Dashboard (Lễ tân, Quản lý)
 router.get('/status/realtime', protect, authorize('receptionist', 'manager'), getRealtimeRoomStatus);
+
+// Dynamic route must come after all static routes
+router.get('/:roomId', protect, getRoomById);
 
 // Route cập nhật trạng thái (Nhiều vai trò)
 router.put('/:roomId/status', protect, authorize('receptionist', 'housekeeper', 'maintenance'), updateRoomStatus);

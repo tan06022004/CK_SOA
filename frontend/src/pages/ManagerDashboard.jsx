@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserCheck, Bed, Users, DollarSign, Calendar, CheckCircle, X } from 'lucide-react';
 import NavBar from '../components/NavBar';
 import StatCard from '../components/StatCard';
 import styles from '../styles/Dashboard.module.css';
+import { apiCall } from '../config/api';
 
 const ManagerDashboard = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState('report'); // mặc định tab xem báo cáo
@@ -10,25 +11,105 @@ const ManagerDashboard = ({ onLogout }) => {
   // State cho modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
-    hoTen: '',
-    sdt: '',
-    namSinh: '',
-    role: 'Nhân viên'
+    name: '',
+    email: '',
+    password: '',
+    role: 'receptionist'
   });
+  const [editingEmployeeId, setEditingEmployeeId] = useState(null);
 
-  // Dữ liệu ví dụ thống kê nhân viên (cho tab nhân viên)
-  const employeeStats = [
-    { title: 'Tổng nhân viên', value: 0, bgColor: '#e9d5ff', icon: <Users size={24} color="#7c3aed" /> },
-    { title: 'Quản trị viên', value: 0, bgColor: '#fee2e2', icon: <UserCheck size={24} color="#dc2626" /> },
-    { title: 'Nhân viên', value: 0, bgColor: '#dbeafe', icon: <UserCheck size={24} color="#2563eb" /> },
-    { title: 'Đang hoạt động', value: 0, bgColor: '#dcfce7', icon: <CheckCircle size={24} color="#22c55e" /> },
-  ];
+  // (Employee stats are derived from loaded employees)
+
+  // State cho dữ liệu thực từ backend
+  const [totalRooms, setTotalRooms] = useState(null);
+  const [occupiedRooms, setOccupiedRooms] = useState(null);
+  const [revenue, setRevenue] = useState(null);
+  const [totalInvoices, setTotalInvoices] = useState(null);
+  const [loadingData, setLoadingData] = useState(false);
+  const [dataError, setDataError] = useState('');
+  // Employees list for staff tab
+  const [employees, setEmployees] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+
+  const loadEmployees = async () => {
+    try {
+      setLoadingEmployees(true);
+      const data = await (async () => {
+        try {
+          const mod = await import('../services/employeeService');
+          const svc = mod.default || mod.employeeService || mod;
+          return await svc.getEmployees();
+        } catch (e) {
+          return await apiCall('/employees');
+        }
+      })();
+      setEmployees(Array.isArray(data) ? data : (data.data || []));
+    } catch (err) {
+      console.error('Failed to load employees', err);
+      setDataError('Không thể tải danh sách nhân viên');
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      setLoadingData(true);
+      setDataError('');
+      try {
+        // 1) Lấy trạng thái phòng (real-time)
+        const roomsResp = await (async () => {
+          try {
+            const mod = await import('../services/roomService');
+            const svc = mod.default || mod.roomService || mod;
+            return await svc.getRealtimeRoomStatus();
+          } catch (e) {
+            return await apiCall('/rooms/status/realtime');
+          }
+        })();
+        if (roomsResp) {
+          setTotalRooms(roomsResp.totalRooms ?? 0);
+          const occupied = (roomsResp.statsByStatus || []).find(s => s._id === 'occupied');
+          setOccupiedRooms(occupied ? occupied.count : 0);
+        }
+
+        // 2) Lấy doanh thu nhanh cho dashboard
+        const revenueResp = await (async () => {
+          try {
+            const mod = await import('../services/dashboardService');
+            const svc = mod.default || mod.dashboardService || mod;
+            return await svc.getRevenue();
+          } catch (e) {
+            return await apiCall('/dashboard/revenue');
+          }
+        })();
+        if (revenueResp) {
+          setRevenue(revenueResp.totalRevenue ?? 0);
+          setTotalInvoices(revenueResp.totalInvoices ?? 0);
+        }
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setDataError(err.message || 'Không thể tải dữ liệu dashboard');
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    fetchDashboard();
+  }, []);
 
   // Xử lý mở/đóng modal
-  const openModal = () => setIsModalOpen(true);
+  const openModal = () => {
+    setEditingEmployeeId(null);
+    setFormData({ name: '', email: '', password: '', role: 'receptionist' });
+    setIsModalOpen(true);
+  };
   const closeModal = () => {
     setIsModalOpen(false);
-    setFormData({ hoTen: '', sdt: '', namSinh: '', role: 'Nhân viên' });
+    setFormData({ name: '', email: '', password: '', role: 'receptionist' });
+    setEditingEmployeeId(null);
   };
 
   // Xử lý thay đổi input
@@ -38,11 +119,63 @@ const ManagerDashboard = ({ onLogout }) => {
   };
 
   // Xử lý lưu (chỉ đóng modal, có thể mở rộng sau)
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Nhân viên mới:', formData);
-    closeModal();
-    // Có thể gọi API hoặc cập nhật danh sách ở đây
+    try {
+      // Create employee via API
+      const payload = {
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        ...(formData.password ? { password: formData.password } : {}),
+      };
+      if (editingEmployeeId) {
+        try {
+          const mod = await import('../services/employeeService');
+          const svc = mod.default || mod.employeeService || mod;
+          await svc.updateEmployee(editingEmployeeId, payload);
+        } catch (e) {
+          await apiCall(`/employees/${editingEmployeeId}`, { method: 'PUT', body: JSON.stringify(payload) });
+        }
+      } else {
+        try {
+          const mod = await import('../services/employeeService');
+          const svc = mod.default || mod.employeeService || mod;
+          await svc.createEmployee(payload);
+        } catch (e) {
+          await apiCall('/employees', { method: 'POST', body: JSON.stringify(payload) });
+        }
+      }
+      closeModal();
+      await loadEmployees();
+      setEditingEmployeeId(null);
+    } catch (err) {
+      console.error('Create employee failed', err);
+      alert('Không thể tạo nhân viên: ' + (err.message || ''));
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'staff') {
+      loadEmployees();
+    }
+  }, [activeTab]);
+
+  const handleDeleteEmployee = async (id) => {
+    if (!window.confirm('Bạn có muốn xóa nhân viên này không?')) return;
+    try {
+      try {
+        const mod = await import('../services/employeeService');
+        const svc = mod.default || mod.employeeService || mod;
+        await svc.deleteEmployee(id);
+      } catch (e) {
+        await apiCall(`/employees/${id}`, { method: 'DELETE' });
+      }
+      await loadEmployees();
+    } catch (err) {
+      console.error(err);
+      alert('Không thể xóa nhân viên');
+    }
   };
 
   return (
@@ -77,12 +210,44 @@ const ManagerDashboard = ({ onLogout }) => {
         {activeTab === 'report' && (
           <>
             <h2 className={styles.sectionTitle}>Tổng quan hệ thống</h2>
-            <div className={`${styles.grid} ${styles.grid4}`}>
-              <StatCard title="Tổng phòng" value="48" icon={Bed} iconColor="text-blue-600" />
-              <StatCard title="Phòng đang sử dụng" value="32" icon={Users} iconColor="text-green-600" />
-              <StatCard title="Doanh thu tháng" value="$125K" icon={DollarSign} iconColor="text-green-600" />
-              <StatCard title="Tỷ lệ lấp đầy" value="67%" icon={Calendar} iconColor="text-purple-600" />
-            </div>
+              <div>
+                {dataError && (
+                  <div style={{ color: '#dc2626', marginBottom: '0.75rem' }}>Lỗi tải dữ liệu: {dataError}</div>
+                )}
+                <div className={`${styles.grid} ${styles.grid4}`}>
+                <StatCard
+                  title="Tổng phòng"
+                  value={loadingData ? 'Đang tải...' : (totalRooms != null ? totalRooms : '—')}
+                  icon={Bed}
+                  iconColor="text-blue-600"
+                />
+
+                <StatCard
+                  title="Phòng đang sử dụng"
+                  value={loadingData ? 'Đang tải...' : (occupiedRooms != null ? occupiedRooms : '—')}
+                  icon={Users}
+                  iconColor="text-green-600"
+                />
+
+                <StatCard
+                  title="Doanh thu"
+                  value={loadingData ? 'Đang tải...' : (revenue != null ? `₫${Number(revenue).toLocaleString()}` : '—')}
+                  icon={DollarSign}
+                  iconColor="text-green-600"
+                />
+
+                <StatCard
+                  title="Tỷ lệ lấp đầy"
+                  value={
+                    loadingData
+                      ? 'Đang tải...'
+                      : (totalRooms ? `${Math.round(((occupiedRooms || 0) / totalRooms) * 100)}%` : '—')
+                  }
+                  icon={Calendar}
+                  iconColor="text-purple-600"
+                />
+                </div>
+              </div>
 
             <div className={`${styles.grid}`} style={{ gridTemplateColumns: '1fr', gap: '1.5rem', marginTop: '1.5rem' }}>
               <div style={{ background: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '1.5rem' }}>
@@ -138,17 +303,36 @@ const ManagerDashboard = ({ onLogout }) => {
             <h2>Quản lý Nhân sự</h2>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              {employeeStats.map(({ title, value, bgColor, icon }) => (
-                <div key={title} style={{ backgroundColor: 'white', flex: 1, padding: '1rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <div style={{ backgroundColor: bgColor, borderRadius: '0.5rem', padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {icon}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '1rem' }}>{value}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{title}</div>
-                  </div>
+              {/* Simple stats from loaded employees */}
+              <div style={{ backgroundColor: 'white', flex: 1, padding: '1rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ backgroundColor: '#e9d5ff', borderRadius: '0.5rem', padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Users size={24} color="#7c3aed" />
                 </div>
-              ))}
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '1rem' }}>{employees.length}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>Tổng nhân viên</div>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: 'white', flex: 1, padding: '1rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ backgroundColor: '#fee2e2', borderRadius: '0.5rem', padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <UserCheck size={24} color="#dc2626" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '1rem' }}>{employees.filter(e=>e.role==='manager').length}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>Quản trị viên</div>
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: 'white', flex: 1, padding: '1rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ backgroundColor: '#dbeafe', borderRadius: '0.5rem', padding: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <UserCheck size={24} color="#2563eb" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '1rem' }}>{employees.filter(e=>e.role && e.role !== 'manager').length}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>Nhân viên</div>
+                </div>
+              </div>
             </div>
 
             {/* Các tab con danh sách nhân viên, chấm công, bảng lương */}
@@ -160,9 +344,11 @@ const ManagerDashboard = ({ onLogout }) => {
 
               <input
                 type="text"
-                placeholder="Tìm kiếm nhân viên..."
+                placeholder="Tìm kiếm nhân viên theo tên hoặc email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 style={{
-                  width: '250px',
+                  width: '300px',
                   padding: '0.5rem 1rem',
                   borderRadius: '0.375rem',
                   border: '1px solid #d1d5db',
@@ -171,6 +357,8 @@ const ManagerDashboard = ({ onLogout }) => {
               />
 
               <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
                 style={{
                   padding: '0.5rem 1rem',
                   borderRadius: '0.375rem',
@@ -178,15 +366,60 @@ const ManagerDashboard = ({ onLogout }) => {
                   marginLeft: '1rem',
                 }}
               >
-                <option>Tất cả vai trò</option>
-                <option>Quản trị viên</option>
-                <option>Nhân viên</option>
+                <option value="all">Tất cả vai trò</option>
+                <option value="manager">Quản lý</option>
+                <option value="receptionist">Lễ tân</option>
+                <option value="housekeeper">Buồng phòng</option>
+                <option value="maintenance">Bảo trì</option>
+                <option value="accountant">Kế toán</option>
               </select>
 
-              {/* Bảng danh sách nhân viên rỗng */}
-              <div style={{ marginTop: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                <p>Chưa có nhân viên nào</p>
-                <p>Hãy thêm nhân viên đầu tiên</p>
+              {/* Bảng danh sách nhân viên */}
+              <div style={{ marginTop: '2rem' }}>
+                {loadingEmployees ? (
+                  <p>Đang tải danh sách nhân viên...</p>
+                ) : employees.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#6b7280' }}>
+                    <p>Chưa có nhân viên nào</p>
+                    <p>Hãy thêm nhân viên đầu tiên</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: '0.75rem' }}>
+                    {(
+                      employees || []
+                    )
+                      .filter(emp => {
+                        // role filter
+                        if (roleFilter && roleFilter !== 'all' && emp.role !== roleFilter) return false;
+                        // search filter (name or email)
+                        if (!searchTerm) return true;
+                        const q = searchTerm.toLowerCase();
+                        const name = (emp.name || '').toLowerCase();
+                        const email = (emp.email || '').toLowerCase();
+                        return name.includes(q) || email.includes(q);
+                      })
+                      .map(emp => (
+                      <div key={emp._id} style={{ background: 'white', padding: '0.75rem', borderRadius: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{emp.name}</div>
+                          <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{emp.email} · {emp.role}</div>
+                        </div>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button
+                                onClick={() => {
+                                  setEditingEmployeeId(emp._id);
+                                  setFormData({ name: emp.name || '', email: emp.email || '', password: '', role: emp.role || 'receptionist' });
+                                  setIsModalOpen(true);
+                                }}
+                                style={{ background: '#3b82f6', color: 'white', padding: '0.5rem', borderRadius: '0.375rem' }}
+                              >Sửa</button>
+
+                              <button onClick={() => handleDeleteEmployee(emp._id)} style={{ background: '#ef4444', color: 'white', padding: '0.5rem', borderRadius: '0.375rem' }}>Xóa</button>
+                            </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </>
@@ -222,7 +455,7 @@ const ManagerDashboard = ({ onLogout }) => {
                 alignItems: 'center'
               }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#1f2937' }}>
-                  Thêm nhân viên mới
+                  {editingEmployeeId ? 'Chỉnh sửa nhân viên' : 'Thêm nhân viên mới'}
                 </h3>
                 <button
                   onClick={closeModal}
@@ -246,93 +479,93 @@ const ManagerDashboard = ({ onLogout }) => {
               {/* Body */}
               <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                      Họ và tên <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="hoTen"
-                      value={formData.hoTen}
-                      onChange={handleInputChange}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem 0.75rem',
-                        borderRadius: '0.375rem',
-                        border: '1px solid #d1d5db',
-                        fontSize: '0.875rem'
-                      }}
-                      placeholder="Nhập họ và tên"
-                    />
-                  </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                        Họ và tên <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        required
+                        style={{
+                          width: '100%',
+                          padding: '0.5rem 0.75rem',
+                          borderRadius: '0.375rem',
+                          border: '1px solid #d1d5db',
+                          fontSize: '0.875rem'
+                        }}
+                        placeholder="Nhập họ và tên"
+                      />
+                    </div>
 
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                      Số điện thoại <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      name="sdt"
-                      value={formData.sdt}
-                      onChange={handleInputChange}
-                      required
-                      pattern="[0-9]{10}"
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem 0.75rem',
-                        borderRadius: '0.375rem',
-                        border: '1px solid #d1d5db',
-                        fontSize: '0.875rem'
-                      }}
-                      placeholder="Ví dụ: 0901234567"
-                    />
-                  </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                        Email <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        required
+                        style={{
+                          width: '100%',
+                          padding: '0.5rem 0.75rem',
+                          borderRadius: '0.375rem',
+                          border: '1px solid #d1d5db',
+                          fontSize: '0.875rem'
+                        }}
+                        placeholder="Ví dụ: abc@hotel.com"
+                      />
+                    </div>
 
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                      Năm sinh <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="namSinh"
-                      value={formData.namSinh}
-                      onChange={handleInputChange}
-                      required
-                      min="1950"
-                      max="2010"
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem 0.75rem',
-                        borderRadius: '0.375rem',
-                        border: '1px solid #d1d5db',
-                        fontSize: '0.875rem'
-                      }}
-                      placeholder="Ví dụ: 1995"
-                    />
-                  </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                        Mật khẩu {editingEmployeeId ? <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>(để trống nếu không đổi)</span> : <span style={{ color: '#ef4444' }}>*</span>}
+                      </label>
+                      <input
+                        type="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleInputChange}
+                        required={!editingEmployeeId}
+                        style={{
+                          width: '100%',
+                          padding: '0.5rem 0.75rem',
+                          borderRadius: '0.375rem',
+                          border: '1px solid #d1d5db',
+                          fontSize: '0.875rem'
+                        }}
+                        placeholder="Ít nhất 6 ký tự"
+                      />
+                    </div>
 
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
-                      Vai trò <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <select
-                      name="role"
-                      value={formData.role}
-                      onChange={handleInputChange}
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem 0.75rem',
-                        borderRadius: '0.375rem',
-                        border: '1px solid #d1d5db',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      <option value="Nhân viên">Nhân viên</option>
-                      <option value="Quản trị viên">Quản trị viên</option>
-                    </select>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#374151' }}>
+                        Vai trò <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <select
+                        name="role"
+                        value={formData.role}
+                        onChange={handleInputChange}
+                        style={{
+                          width: '100%',
+                          padding: '0.5rem 0.75rem',
+                          borderRadius: '0.375rem',
+                          border: '1px solid #d1d5db',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        <option value="manager">Quản lý</option>
+                        <option value="receptionist">Lễ tân</option>
+                        <option value="housekeeper">Buồng phòng</option>
+                        <option value="maintenance">Bảo trì</option>
+                        <option value="accountant">Kế toán</option>
+                      </select>
+                    </div>
                   </div>
-                </div>
 
                 {/* Footer */}
                 <div style={{

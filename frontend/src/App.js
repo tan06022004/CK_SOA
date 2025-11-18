@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import ReceptionistDashboard from './pages/ReceptionistDashboard';
@@ -11,11 +11,36 @@ import ProtectedRoute from './components/ProtectedRoute';
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
 
-  const handleLogin = (role) => {
-    setCurrentUser(role);
+  useEffect(() => {
+    // Check if user is logged in on app load
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        // Validate user data has required fields
+        if (userData && userData.role) {
+          setCurrentUser(userData);
+        } else {
+          // Invalid user data, clear it
+          console.warn('Invalid user data in localStorage, clearing...');
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+        }
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+      }
+    }
+  }, []);
+
+  const handleLogin = (user) => {
+    setCurrentUser(user);
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
     setCurrentUser(null);
   };
 
@@ -25,13 +50,17 @@ function App() {
         <Route
           path="/login"
           element={
-            currentUser ? <Navigate to={`/${currentUser}`} /> : <Login onLogin={handleLogin} />
+            currentUser && currentUser.role ? (
+              <Navigate to={`/${currentUser.role}`} replace />
+            ) : (
+              <Login onLogin={handleLogin} />
+            )
           }
         />
         <Route
           path="/receptionist"
           element={
-            <ProtectedRoute isAuthenticated={currentUser === 'receptionist'}>
+            <ProtectedRoute isAuthenticated={currentUser?.role === 'receptionist'}>
               <ReceptionistDashboard onLogout={handleLogout} />
             </ProtectedRoute>
           }
@@ -39,15 +68,15 @@ function App() {
         <Route
           path="/accountant"
           element={
-            <ProtectedRoute isAuthenticated={currentUser === 'accountant'}>
+            <ProtectedRoute isAuthenticated={currentUser?.role === 'accountant'}>
               <AccountantDashboard onLogout={handleLogout} />
             </ProtectedRoute>
           }
         />
         <Route
-          path="/housekeeping"
+          path="/housekeeper"
           element={
-            <ProtectedRoute isAuthenticated={currentUser === 'housekeeping'}>
+            <ProtectedRoute isAuthenticated={currentUser?.role === 'housekeeper'}>
               <HousekeepingDashboard onLogout={handleLogout} />
             </ProtectedRoute>
           }
@@ -55,7 +84,7 @@ function App() {
         <Route
           path="/maintenance"
           element={
-            <ProtectedRoute isAuthenticated={currentUser === 'maintenance'}>
+            <ProtectedRoute isAuthenticated={currentUser?.role === 'maintenance'}>
               <MaintenanceDashboard onLogout={handleLogout} />
             </ProtectedRoute>
           }
@@ -63,12 +92,22 @@ function App() {
         <Route
           path="/manager"
           element={
-            <ProtectedRoute isAuthenticated={currentUser === 'manager'}>
+            <ProtectedRoute isAuthenticated={currentUser?.role === 'manager'}>
               <ManagerDashboard onLogout={handleLogout} />
             </ProtectedRoute>
           }
         />
-        <Route path="*" element={<Navigate to="/login" />} />
+        <Route 
+          path="/" 
+          element={
+            currentUser && currentUser.role ? (
+              <Navigate to={`/${currentUser.role}`} replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   );

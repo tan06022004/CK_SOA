@@ -45,7 +45,7 @@ const loginUser = asyncHandler(async (req, res) => {
  */
 const getProfile = asyncHandler(async (req, res) => {
     // req.user được gán từ middleware 'protect'
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await User.findById(req.user._id).select('-password');
     
     if (user) {
         res.json({

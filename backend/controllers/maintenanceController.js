@@ -14,7 +14,7 @@ const reportMaintenanceIssue = asyncHandler(async (req, res, next) => {
     room: roomId,
     issueDescription: description, // Khớp với model
     priority,
-    reportedBy: req.user.id,
+    reportedBy: req.user._id,
   });
   
   // KHÔNG CẦN CẬP NHẬT TRẠNG THÁI PHÒNG

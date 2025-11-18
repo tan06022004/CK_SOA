@@ -5,10 +5,8 @@ const connectDB = async () => {
   try {
     mongoose.set('strictQuery', true);
     
-    // (Hãy chắc chắn file .env của bạn có biến MONGODB_URL)
     const conn = await mongoose.connect(process.env.MONGODB_URL); 
-
-    console.log(`✅ MongoDB Connected!`);
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error(`❌ Error connecting to MongoDB: ${error.message}`);
     process.exit(1);

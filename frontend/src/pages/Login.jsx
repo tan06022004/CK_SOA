@@ -1,26 +1,35 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, User, Lock, Eye, EyeOff } from 'lucide-react';
+import { Home, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { authService } from '../services/authService';
 import styles from '../styles/Login.module.css';
 
 const Login = ({ onLogin }) => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    const result = authService.login(username, password);
+    setIsLoading(true);
 
-    if (result.success) {
-      onLogin(result.role);
-      navigate(`/${result.role}`);
-    } else {
-      setError(result.message);
+    try {
+      const result = await authService.login(email, password);
+
+      if (result.success) {
+        onLogin(result.user);
+        navigate(`/${result.user.role}`);
+      } else {
+        setError(result.message);
+      }
+    } catch (err) {
+      setError(err.message || 'Đã xảy ra lỗi khi đăng nhập');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -38,19 +47,19 @@ const Login = ({ onLogin }) => {
         <form onSubmit={handleSubmit} className={styles.form}>
           {error && <div className={styles.error}>{error}</div>}
 
-          {/* Username Input */}
+          {/* Email Input */}
           <div>
-            <label className={styles.label}>Tên đăng nhập</label>
+            <label className={styles.label}>Email</label>
             <div className={styles.inputWrapper}>
-              <User className={styles.icon} />
+              <Mail className={styles.icon} />
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className={styles.input}
-                placeholder="Nhập tên đăng nhập"
+                placeholder="Nhập email"
                 required
-                autoComplete="username"
+                autoComplete="email"
               />
             </div>
           </div>
@@ -81,8 +90,8 @@ const Login = ({ onLogin }) => {
             </div>
           </div>
 
-          <button type="submit" className={styles.button}>
-            Đăng nhập
+          <button type="submit" className={styles.button} disabled={isLoading}>
+            {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
           </button>
 
         </form>

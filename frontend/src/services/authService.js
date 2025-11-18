@@ -1,32 +1,69 @@
+import { apiCall } from '../config/api';
+
 export const authService = {
-    users: {
-      'receptionist': { password: '123456', role: 'receptionist' },
-      'accountant': { password: '123456', role: 'accountant' },
-      'housekeeping': { password: '123456', role: 'housekeeping' },
-      'maintenance': { password: '123456', role: 'maintenance' },
-      'manager': { password: '123456', role: 'manager' }
-    },
-  
-    login: (username, password) => {
-      const user = authService.users[username.toLowerCase()];
-      
-      if (user && user.password === password) {
-        return {
-          success: true,
-          role: user.role,
-          message: 'Đăng nhập thành công'
-        };
+  login: async (email, password) => {
+    try {
+      const response = await apiCall('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+
+      // Store token and user data
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+        localStorage.setItem('user', JSON.stringify({
+          _id: response._id,
+          name: response.name,
+          email: response.email,
+          role: response.role,
+        }));
       }
-      
+
+      return {
+        success: true,
+        user: {
+          _id: response._id,
+          name: response.name,
+          email: response.email,
+          role: response.role,
+        },
+        message: 'Đăng nhập thành công',
+      };
+    } catch (error) {
       return {
         success: false,
-        message: 'Tên đăng nhập hoặc mật khẩu không đúng'
+        message: error.message || 'Tên đăng nhập hoặc mật khẩu không đúng',
       };
-    },
-  
-    logout: () => {
-      // Clear session/token logic here
-      return true;
     }
-  };
-  
+  },
+
+  getProfile: async () => {
+    try {
+      const response = await apiCall('/auth/profile');
+      return {
+        success: true,
+        user: response,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  },
+
+  logout: async () => {
+    try {
+      await apiCall('/auth/logout', {
+        method: 'POST',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear local storage regardless of API call result
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+    return true;
+  },
+};

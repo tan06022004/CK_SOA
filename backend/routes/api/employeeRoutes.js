@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+  createEmployee,
   getAllEmployees,
   getEmployeeById,
   updateEmployee,
@@ -12,6 +13,7 @@ const { protect, authorize } = require('../../middleware/authMiddleware');
 router.use(protect, authorize('manager'));
 
 router.route('/')
+  .post(createEmployee)
   .get(getAllEmployees);
 
 router.route('/:id')

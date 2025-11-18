@@ -28,7 +28,7 @@ const generateOccupancyReport = asyncHandler(async (req, res, next) => {
       startDate: fromDate,
       endDate: toDate,
       data: data,
-      generatedBy: req.user.id
+      generatedBy: req.user._id
   });
 
   res.status(201).json(report);
@@ -71,7 +71,7 @@ const generateRevenueReport = asyncHandler(async (req, res, next) => {
         startDate: fromDate,
         endDate: toDate,
         data: { totalRevenue: total, dailyBreakdown: revenueData },
-        generatedBy: req.user.id
+        generatedBy: req.user._id
     });
 
     res.status(201).json(report);

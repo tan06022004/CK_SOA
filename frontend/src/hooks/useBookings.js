@@ -49,9 +49,9 @@ export const useBookings = () => {
     }
   };
 
-  const deleteBooking = async (id) => {
+  const cancelBooking = async (id) => {
     try {
-      const result = await bookingService.deleteBooking(id);
+      const result = await bookingService.cancelBooking(id);
       if (result.success) {
         await fetchBookings();
       }
@@ -62,5 +62,5 @@ export const useBookings = () => {
     }
   };
 
-  return { bookings, isLoading, error, createBooking, updateBooking, deleteBooking, refetch: fetchBookings };
+  return { bookings, isLoading, error, createBooking, updateBooking, cancelBooking, refetch: fetchBookings };
 };

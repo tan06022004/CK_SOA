@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db.js');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
@@ -23,6 +24,13 @@ dotenv.config();
 connectDB();
 
 const app = express();
+
+// CORS configuration
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
+
 app.use(express.json());
 
 // --- Định nghĩa các API Routes ---

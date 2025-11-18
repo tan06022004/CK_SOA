@@ -1,25 +1,18 @@
-// routes/api/employeeRoutes.js
+// routes/api/authRoutes.js
 const express = require('express');
 const router = express.Router();
 const {
-    createEmployee,
-    getAllEmployees,
-    getEmployeeById,
-    updateEmployee,
-    deleteEmployee
-} = require('../../controllers/employeeController');
-const { protect, authorize } = require('../../middleware/authMiddleware');
+    loginUser,
+    getProfile,
+    logoutUser
+} = require('../../controllers/authController');
+const { protect } = require('../../middleware/authMiddleware');
 
-// Chỉ Manager mới có quyền truy cập
-router.use(protect, authorize('manager'));
+// Public routes
+router.post('/login', loginUser);
 
-router.route('/')
-    .post(createEmployee)
-    .get(getAllEmployees);
-
-router.route('/:id')
-    .get(getEmployeeById)
-    .put(updateEmployee)
-    .delete(deleteEmployee);
+// Protected routes
+router.get('/profile', protect, getProfile);
+router.post('/logout', protect, logoutUser);
 
 module.exports = router;
