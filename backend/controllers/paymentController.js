@@ -39,25 +39,55 @@ const recordPayment = asyncHandler(async (req, res, next) => {
  * @access  Private (Accountant, Manager)
  */
 const getTransactionHistory = asyncHandler(async (req, res, next) => {
-    const { fromDate, toDate, method } = req.query;
+    try {
+        const { fromDate, toDate, method } = req.query;
 
-    const filter = {
-        paymentStatus: 'paid' // Chỉ lấy giao dịch đã thanh toán
-    };
-    
-    if (method) filter.paymentMethod = method;
-    if (fromDate) filter.updatedAt = { ...filter.updatedAt, $gte: new Date(fromDate) }; // Giả sử ngày thanh toán là ngày cập nhật
-    if (toDate) filter.updatedAt = { ...filter.updatedAt, $lte: new Date(toDate) };
+        console.log('[GET_TRANSACTIONS] Request received:', { fromDate, toDate, method });
+        console.log('[GET_TRANSACTIONS] User:', req.user?.email, 'Role:', req.user?.role);
 
-    const transactions = await Invoice.find(filter)
-        .populate({
-            path: 'booking',
-            select: 'guest',
-            populate: { path: 'guest', select: 'fullName' }
-        })
-        .sort('-updatedAt');
-    
-    res.json(transactions);
+        const filter = {
+            paymentStatus: 'paid' // Chỉ lấy giao dịch đã thanh toán
+        };
+        
+        if (method) {
+            filter.paymentMethod = method;
+        }
+        
+        // Fix date filter logic
+        if (fromDate || toDate) {
+            filter.updatedAt = {};
+            if (fromDate) {
+                filter.updatedAt.$gte = new Date(fromDate);
+            }
+            if (toDate) {
+                filter.updatedAt.$lte = new Date(toDate);
+            }
+        }
+
+        console.log('[GET_TRANSACTIONS] Filter:', JSON.stringify(filter, null, 2));
+
+        const transactions = await Invoice.find(filter)
+            .populate({
+                path: 'booking',
+                select: 'guest checkInDate checkOutDate',
+                populate: { 
+                    path: 'guest', 
+                    select: 'fullName phoneNumber email' 
+                }
+            })
+            .sort('-updatedAt')
+            .lean(); // Use lean() for better performance
+        
+        console.log(`[GET_TRANSACTIONS] Found ${transactions.length} transactions`);
+        
+        res.json(transactions);
+    } catch (error) {
+        console.error('[GET_TRANSACTIONS] Error:', error);
+        res.status(500).json({ 
+            message: 'Lỗi khi lấy lịch sử giao dịch',
+            error: error.message 
+        });
+    }
 });
 
 module.exports = {

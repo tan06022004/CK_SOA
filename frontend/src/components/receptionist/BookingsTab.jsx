@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Calendar, User, Bed, DollarSign } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Edit, Trash2, Calendar, User, Bed, DollarSign, Filter, X } from 'lucide-react';
 import { useBookings } from '../../hooks/useBookings';
 import { bookingService } from '../../services/bookingService';
 import { guestService } from '../../services/guestService';
@@ -7,6 +7,7 @@ import { roomService } from '../../services/roomService';
 import styles from '../../styles/Table.module.css';
 import buttonStyles from '../../styles/Button.module.css';
 import badgeStyles from '../../styles/Badge.module.css';
+import dashboardStyles from '../../styles/Dashboard.module.css';
 
 const BookingsTab = () => {
   const { bookings, isLoading, error, createBooking, updateBooking, cancelBooking, refetch } = useBookings();
@@ -14,6 +15,7 @@ const BookingsTab = () => {
   const [editingBookingId, setEditingBookingId] = useState(null);
   const [guests, setGuests] = useState([]);
   const [availableRooms, setAvailableRooms] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'
   const [newBooking, setNewBooking] = useState({
     customerId: '',
     guestInfo: { fullName: '', phoneNumber: '', email: '' },
@@ -23,6 +25,32 @@ const BookingsTab = () => {
     numberOfGuests: 1
   });
   const [useExistingGuest, setUseExistingGuest] = useState(true);
+
+  // Filter bookings based on status
+  const filteredBookings = useMemo(() => {
+    if (statusFilter === 'all') {
+      return bookings;
+    }
+    return bookings.filter(booking => booking.status === statusFilter);
+  }, [bookings, statusFilter]);
+
+  // Count bookings by status
+  const statusCounts = useMemo(() => {
+    const counts = {
+      all: bookings.length,
+      pending: 0,
+      confirmed: 0,
+      checked_in: 0,
+      checked_out: 0,
+      cancelled: 0
+    };
+    bookings.forEach(booking => {
+      if (booking.status && counts.hasOwnProperty(booking.status)) {
+        counts[booking.status]++;
+      }
+    });
+    return counts;
+  }, [bookings]);
 
   useEffect(() => {
     // Load guests and rooms when modal opens
@@ -156,6 +184,94 @@ const BookingsTab = () => {
 
       {error && <div className={styles.error}>{error}</div>}
 
+      {/* Filter Bar */}
+      <div style={{
+        background: 'white',
+        padding: '1rem',
+        borderRadius: '0.5rem',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        marginBottom: '1.5rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '1rem',
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600, color: '#374151' }}>
+          <Filter size={18} />
+          <span>Lọc theo trạng thái:</span>
+        </div>
+        
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: 1 }}>
+          {[
+            { value: 'all', label: 'Tất cả', count: statusCounts.all },
+            { value: 'pending', label: 'Chờ xác nhận', count: statusCounts.pending },
+            { value: 'confirmed', label: 'Đã xác nhận', count: statusCounts.confirmed },
+            { value: 'checked_in', label: 'Đã check-in', count: statusCounts.checked_in },
+            { value: 'checked_out', label: 'Đã check-out', count: statusCounts.checked_out },
+            { value: 'cancelled', label: 'Đã hủy', count: statusCounts.cancelled }
+          ].map(option => (
+            <button
+              key={option.value}
+              onClick={() => setStatusFilter(option.value)}
+              className={`${buttonStyles.base} ${buttonStyles.sm} ${
+                statusFilter === option.value ? buttonStyles.primary : buttonStyles.secondary
+              }`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                position: 'relative'
+              }}
+            >
+              <span>{option.label}</span>
+              {option.count > 0 && (
+                <span style={{
+                  background: statusFilter === option.value ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)',
+                  padding: '0.125rem 0.5rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600
+                }}>
+                  {option.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {statusFilter !== 'all' && (
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`${buttonStyles.base} ${buttonStyles.sm} ${buttonStyles.secondary}`}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+            title="Xóa bộ lọc"
+          >
+            <X size={14} />
+            Xóa lọc
+          </button>
+        )}
+      </div>
+
+      {/* Stats Summary */}
+      <div className={dashboardStyles.grid} style={{ marginBottom: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+        <div style={{ background: 'white', padding: '1rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>Tổng đặt phòng</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1f2937' }}>{statusCounts.all}</div>
+        </div>
+        <div style={{ background: 'white', padding: '1rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>Đã xác nhận</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#3b82f6' }}>{statusCounts.confirmed}</div>
+        </div>
+        <div style={{ background: 'white', padding: '1rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>Đang ở</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#22c55e' }}>{statusCounts.checked_in}</div>
+        </div>
+        <div style={{ background: 'white', padding: '1rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.5rem' }}>Đã hủy</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#ef4444' }}>{statusCounts.cancelled}</div>
+        </div>
+      </div>
+
       {/* Table */}
       <div className={styles.tableWrapper}>
         <table className={styles.table}>
@@ -172,14 +288,23 @@ const BookingsTab = () => {
             </tr>
           </thead>
           <tbody>
-            {bookings.length === 0 ? (
+            {filteredBookings.length === 0 ? (
               <tr>
                 <td colSpan="8" style={{ textAlign: 'center', padding: '2rem' }}>
-                  Không có đặt phòng nào
+                  {statusFilter === 'all' 
+                    ? 'Không có đặt phòng nào'
+                    : `Không có đặt phòng nào với trạng thái "${[
+                        { value: 'pending', label: 'Chờ xác nhận' },
+                        { value: 'confirmed', label: 'Đã xác nhận' },
+                        { value: 'checked_in', label: 'Đã check-in' },
+                        { value: 'checked_out', label: 'Đã check-out' },
+                        { value: 'cancelled', label: 'Đã hủy' }
+                      ].find(s => s.value === statusFilter)?.label || statusFilter}"`
+                  }
                 </td>
               </tr>
             ) : (
-              bookings.map(booking => (
+              filteredBookings.map(booking => (
                 <tr key={booking._id} className={styles.row}>
                   <td className={styles.id}>#{booking._id.slice(-6)}</td>
                   <td className={styles.customer}>

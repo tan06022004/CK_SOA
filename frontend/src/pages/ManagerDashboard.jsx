@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { UserCheck, Bed, Users, DollarSign, Calendar, CheckCircle, X } from 'lucide-react';
+import { UserCheck, Bed, Users, DollarSign, Calendar, CheckCircle, X, FileText, Home, Settings } from 'lucide-react';
 import NavBar from '../components/NavBar';
 import StatCard from '../components/StatCard';
 import styles from '../styles/Dashboard.module.css';
 import { apiCall } from '../config/api';
+import RoomsManagementTab from '../components/manager/RoomsManagementTab';
+import RoomTypesTab from '../components/manager/RoomTypesTab';
+import ReportsTab from '../components/manager/ReportsTab';
 
 const ManagerDashboard = ({ onLogout }) => {
-  const [activeTab, setActiveTab] = useState('report'); // mặc định tab xem báo cáo
+  const [activeTab, setActiveTab] = useState('dashboard'); // mặc định tab dashboard
 
   // State cho modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,51 +57,60 @@ const ManagerDashboard = ({ onLogout }) => {
     }
   };
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      setLoadingData(true);
-      setDataError('');
-      try {
-        // 1) Lấy trạng thái phòng (real-time)
-        const roomsResp = await (async () => {
-          try {
-            const mod = await import('../services/roomService');
-            const svc = mod.default || mod.roomService || mod;
-            return await svc.getRealtimeRoomStatus();
-          } catch (e) {
-            return await apiCall('/rooms/status/realtime');
-          }
-        })();
-        if (roomsResp) {
-          setTotalRooms(roomsResp.totalRooms ?? 0);
-          const occupied = (roomsResp.statsByStatus || []).find(s => s._id === 'occupied');
-          setOccupiedRooms(occupied ? occupied.count : 0);
+  const fetchDashboard = async () => {
+    setLoadingData(true);
+    setDataError('');
+    try {
+      // 1) Lấy trạng thái phòng (real-time)
+      const roomsResp = await (async () => {
+        try {
+          const mod = await import('../services/roomService');
+          const svc = mod.default || mod.roomService || mod;
+          return await svc.getRealtimeRoomStatus();
+        } catch (e) {
+          return await apiCall('/rooms/status/realtime');
         }
-
-        // 2) Lấy doanh thu nhanh cho dashboard
-        const revenueResp = await (async () => {
-          try {
-            const mod = await import('../services/dashboardService');
-            const svc = mod.default || mod.dashboardService || mod;
-            return await svc.getRevenue();
-          } catch (e) {
-            return await apiCall('/dashboard/revenue');
-          }
-        })();
-        if (revenueResp) {
-          setRevenue(revenueResp.totalRevenue ?? 0);
-          setTotalInvoices(revenueResp.totalInvoices ?? 0);
-        }
-      } catch (err) {
-        console.error('Error fetching dashboard data:', err);
-        setDataError(err.message || 'Không thể tải dữ liệu dashboard');
-      } finally {
-        setLoadingData(false);
+      })();
+      if (roomsResp) {
+        setTotalRooms(roomsResp.totalRooms ?? 0);
+        const occupied = (roomsResp.statsByStatus || []).find(s => s._id === 'occupied');
+        setOccupiedRooms(occupied ? occupied.count : 0);
       }
-    };
 
+      // 2) Lấy doanh thu nhanh cho dashboard
+      const revenueResp = await (async () => {
+        try {
+          const mod = await import('../services/dashboardService');
+          const svc = mod.default || mod.dashboardService || mod;
+          return await svc.getRevenue();
+        } catch (e) {
+          return await apiCall('/dashboard/revenue');
+        }
+      })();
+      if (revenueResp) {
+        setRevenue(revenueResp.totalRevenue ?? 0);
+        setTotalInvoices(revenueResp.totalInvoices ?? 0);
+      }
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setDataError(err.message || 'Không thể tải dữ liệu dashboard');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDashboard();
-  }, []);
+    
+    // Auto-refresh mỗi 30 giây để đồng bộ trạng thái phòng
+    const interval = setInterval(() => {
+      if (activeTab === 'dashboard') {
+        fetchDashboard();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
   // Xử lý mở/đóng modal
   const openModal = () => {
@@ -184,30 +196,35 @@ const ManagerDashboard = ({ onLogout }) => {
 
       <div className={styles.content}>
         {/* Tabs chuyển đổi */}
-        <div className={styles.tabs}>
-          <div
-            className={`${styles.tab} ${activeTab === 'report' ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab('report')}
-          >
-            Xem Báo Cáo
-          </div>
-          <div
-            className={`${styles.tab} ${activeTab === 'staff' ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab('staff')}
-          >
-            Quản Lý Nhân Viên
-          </div>
-
-          {/* Nút thêm nhân viên chỉ hiện khi tab active là staff */}
+        <div className={styles.tabNav}>
+          {[
+            { id: 'dashboard', label: 'Tổng quan', icon: Home },
+            { id: 'report', label: 'Báo cáo', icon: FileText },
+            { id: 'staff', label: 'Nhân viên', icon: Users },
+            { id: 'rooms', label: 'Phòng', icon: Bed },
+            { id: 'roomtypes', label: 'Loại phòng', icon: Settings },
+          ].map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`${styles.tab} ${activeTab === tab.id ? styles.tabActive : ''}`}
+              >
+                <Icon size={18} className={styles.tabIcon} />
+                <span className={styles.tabLabel}>{tab.label}</span>
+              </button>
+            );
+          })}
           {activeTab === 'staff' && (
-            <button className={styles.addEmployeeButton} onClick={openModal}>
+            <button className={styles.addEmployeeButton} onClick={openModal} style={{ marginLeft: 'auto' }}>
               + Thêm nhân viên
             </button>
           )}
         </div>
 
         {/* Nội dung từng tab */}
-        {activeTab === 'report' && (
+        {activeTab === 'dashboard' && (
           <>
             <h2 className={styles.sectionTitle}>Tổng quan hệ thống</h2>
               <div>
@@ -251,51 +268,48 @@ const ManagerDashboard = ({ onLogout }) => {
 
             <div className={`${styles.grid}`} style={{ gridTemplateColumns: '1fr', gap: '1.5rem', marginTop: '1.5rem' }}>
               <div style={{ background: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '1.5rem' }}>
-                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#1f2937', marginBottom: '1rem' }}>Báo cáo doanh thu</h3>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#1f2937', marginBottom: '1rem' }}>Trạng thái phòng</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {[
-                    { label: 'Phòng Standard', value: '$35,000', percent: 45 },
-                    { label: 'Phòng Deluxe', value: '$55,000', percent: 70 },
-                    { label: 'Phòng Suite', value: '$35,000', percent: 45 },
-                  ].map(item => (
-                    <div key={item.label}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                        <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>{item.label}</span>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1f2937' }}>{item.value}</span>
+                  {loadingData ? (
+                    <p style={{ color: '#6b7280' }}>Đang tải...</p>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                      <div>
+                        <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.25rem' }}>Tổng phòng</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937' }}>{totalRooms || 0}</div>
                       </div>
-                      <div style={{ width: '100%', background: '#e5e7eb', borderRadius: '9999px', height: '0.5rem' }}>
-                        <div
-                          style={{
-                            width: `${item.percent}%`,
-                            background:
-                              item.percent > 60 ? '#22c55e' : item.percent > 40 ? '#3b82f6' : '#a855f7',
-                            height: '100%',
-                            borderRadius: '9999px',
-                          }}
-                        ></div>
+                      <div>
+                        <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.25rem' }}>Đang sử dụng</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#22c55e' }}>{occupiedRooms || 0}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.25rem' }}>Tỷ lệ lấp đầy</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#3b82f6' }}>
+                          {totalRooms ? `${Math.round(((occupiedRooms || 0) / totalRooms) * 100)}%` : '0%'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.25rem' }}>Hóa đơn đã thanh toán</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#7c3aed' }}>{totalInvoices || 0}</div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ background: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '1.5rem' }}>
-                <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#1f2937', marginBottom: '1rem' }}>Hoạt động gần đây</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                    <div style={{ background: '#d1fae5', borderRadius: '50%', padding: '0.5rem', marginRight: '0.75rem' }}>
-                      <CheckCircle className="text-green-600" size={20} />
-                    </div>
-                    <div>
-                      <p style={{ fontSize: '0.875rem', fontWeight: 500, color: '#1f2937' }}>Check-in mới</p>
-                      <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>Nguyen Van A - Phòng 101</p>
-                      <p style={{ fontSize: '0.75rem', color: '#9ca3af' }}>5 phút trước</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
           </>
+        )}
+
+        {activeTab === 'report' && (
+          <ReportsTab />
+        )}
+
+        {activeTab === 'rooms' && (
+          <RoomsManagementTab />
+        )}
+
+        {activeTab === 'roomtypes' && (
+          <RoomTypesTab />
         )}
 
         {activeTab === 'staff' && (

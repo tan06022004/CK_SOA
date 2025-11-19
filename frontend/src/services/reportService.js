@@ -21,9 +21,15 @@ export const reportService = {
     }
   },
 
-  listReports: async () => {
+  listReports: async (filters = {}) => {
     try {
-      const data = await apiCall('/reports');
+      const queryParams = new URLSearchParams();
+      if (filters.type) queryParams.append('type', filters.type);
+
+      const queryString = queryParams.toString();
+      const endpoint = `/reports${queryString ? `?${queryString}` : ''}`;
+      
+      const data = await apiCall(endpoint);
       return data;
     } catch (error) {
       throw error;

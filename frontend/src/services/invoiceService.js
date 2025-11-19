@@ -3,8 +3,16 @@ import { apiCall } from '../config/api';
 export const invoiceService = {
   getAllInvoices: async (filters = {}) => {
     try {
-      const qs = new URLSearchParams(filters).toString();
-      const data = await apiCall(`/invoices${qs ? `?${qs}` : ''}`);
+      const queryParams = new URLSearchParams();
+      if (filters.status) queryParams.append('status', filters.status);
+      if (filters.bookingId) queryParams.append('bookingId', filters.bookingId);
+      if (filters.fromDate) queryParams.append('fromDate', filters.fromDate);
+      if (filters.toDate) queryParams.append('toDate', filters.toDate);
+
+      const queryString = queryParams.toString();
+      const endpoint = `/invoices${queryString ? `?${queryString}` : ''}`;
+      
+      const data = await apiCall(endpoint);
       return data;
     } catch (error) {
       throw error;

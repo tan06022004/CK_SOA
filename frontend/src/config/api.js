@@ -20,6 +20,7 @@ const apiCall = async (endpoint, options = {}) => {
   };
 
   try {
+    console.log(`[API_CALL] ${options.method || 'GET'} ${API_BASE_URL}${endpoint}`);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
     
     let data;
@@ -31,8 +32,12 @@ const apiCall = async (endpoint, options = {}) => {
       throw new Error(text || `HTTP error! status: ${response.status}`);
     }
 
+    console.log(`[API_CALL] Response status: ${response.status}`, data);
+
     if (!response.ok) {
-      throw new Error(data.message || data.error || `HTTP error! status: ${response.status}`);
+      const errorMsg = data.message || data.error || `HTTP error! status: ${response.status}`;
+      console.error(`[API_CALL] Error ${response.status}:`, errorMsg);
+      throw new Error(errorMsg);
     }
 
     return data;

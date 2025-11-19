@@ -1,11 +1,11 @@
 import { apiCall } from '../config/api';
 
 export const maintenanceService = {
-  reportIssue: async (issue) => {
+  reportIssue: async ({ roomId, description, priority }) => {
     try {
       const data = await apiCall('/maintenance/issues', {
         method: 'POST',
-        body: JSON.stringify(issue),
+        body: JSON.stringify({ roomId, description, priority }),
       });
       return { success: true, data };
     } catch (error) {

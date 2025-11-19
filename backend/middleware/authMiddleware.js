@@ -15,17 +15,24 @@ const protect = asyncHandler(async (req, res, next) => {
             token = req.headers.authorization.split(' ')[1];
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
             req.user = await User.findById(decoded.id).select('-password');
+            
+            if (!req.user) {
+                console.error('[PROTECT] User not found in database');
+                res.status(401);
+                return res.json({ message: 'User not found' });
+            }
+            
+            console.log(`[PROTECT] User authenticated: ${req.user.email}, Role: ${req.user.role}`);
             next();
         } catch (error) {
-            console.error(error);
+            console.error('[PROTECT] Token verification failed:', error.message);
             res.status(401);
-            throw new Error('Not authorized, token failed');
+            return res.json({ message: 'Not authorized, token failed' });
         }
-    }
-
-    if (!token) {
+    } else {
+        console.error('[PROTECT] No token provided');
         res.status(401);
-        throw new Error('Not authorized, no token');
+        return res.json({ message: 'Not authorized, no token' });
     }
 });
 
@@ -36,11 +43,33 @@ const protect = asyncHandler(async (req, res, next) => {
 const authorize = (...roles) => {
     return (req, res, next) => {
         // req.user được gán từ middleware 'protect'
-        if (!req.user || !roles.includes(req.user.role)) {
+        if (!req.user) {
+            console.error('[AUTHORIZE] req.user is missing');
+            res.status(403);
+            return res.json({ message: 'User not authenticated' });
+        }
+        
+        // Normalize user role (trim và lowercase để đảm bảo so sánh chính xác)
+        const userRole = (req.user.role || '').toString().trim().toLowerCase();
+        const allowedRoles = roles.map(r => (r || '').toString().trim().toLowerCase());
+        
+        // Debug logging với thông tin chi tiết
+        console.log(`[AUTHORIZE] User: ${req.user.email}`);
+        console.log(`[AUTHORIZE] User role (normalized): '${userRole}'`);
+        console.log(`[AUTHORIZE] User role (raw): '${req.user.role}'`);
+        console.log(`[AUTHORIZE] Allowed roles (normalized): [${allowedRoles.join(', ')}]`);
+        console.log(`[AUTHORIZE] Allowed roles (raw): [${roles.join(', ')}]`);
+        
+        if (!allowedRoles.includes(userRole)) {
+            console.error(`[AUTHORIZE] Access denied: User role '${userRole}' (raw: '${req.user.role}') not in allowed roles [${allowedRoles.join(', ')}] (raw: [${roles.join(', ')}])`);
             res.status(403); // 403 Forbidden
-            throw new Error(`User role '${req.user.role}' is not authorized to access this resource`);
+            return res.json({ 
+                message: `User role '${req.user.role}' is not authorized to access this resource`,
+                error: `User role '${req.user.role}' is not authorized to access this resource`
+            });
         }
         // Nếu role hợp lệ, cho đi tiếp
+        console.log(`[AUTHORIZE] ✅ Access granted for role: ${userRole} (raw: ${req.user.role})`);
         next();
     };
 };

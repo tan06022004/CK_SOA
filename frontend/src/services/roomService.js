@@ -80,4 +80,28 @@ export const roomService = {
       throw error;
     }
   },
+
+  createRoom: async (roomData) => {
+    try {
+      const data = await apiCall('/rooms', {
+        method: 'POST',
+        body: JSON.stringify(roomData),
+      });
+      return { success: true, data };
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  updateRoomInfo: async (id, roomData) => {
+    try {
+      const data = await apiCall(`/rooms/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(roomData),
+      });
+      return { success: true, data };
+    } catch (error) {
+      throw error;
+    }
+  },
 };

@@ -1,9 +1,15 @@
 import { apiCall } from '../config/api';
 
 export const employeeService = {
-  getEmployees: async () => {
+  getEmployees: async (filters = {}) => {
     try {
-      const data = await apiCall('/employees');
+      const queryParams = new URLSearchParams();
+      if (filters.role) queryParams.append('role', filters.role);
+
+      const queryString = queryParams.toString();
+      const endpoint = `/employees${queryString ? `?${queryString}` : ''}`;
+      
+      const data = await apiCall(endpoint);
       return data;
     } catch (error) {
       throw error;
