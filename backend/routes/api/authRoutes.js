@@ -1,4 +1,6 @@
 // routes/api/authRoutes.js
+const { loginLimiter } = require('../../middleware/rateLimiters');
+
 const express = require('express');
 const router = express.Router();
 const {
@@ -9,7 +11,7 @@ const {
 const { protect } = require('../../middleware/authMiddleware');
 
 // Public routes
-router.post('/login', loginUser);
+router.post('/login',loginLimiter, loginUser);
 
 // Protected routes
 router.get('/profile', protect, getProfile);

@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const RoomType = require('../models/roomTypeModel');
 const Room = require('../models/roomModel');
+const { getCache, setCache } = require('../src/services/cacheService');
 
 /**
  * @desc    Tạo loại phòng mới
@@ -32,8 +33,21 @@ const createRoomType = asyncHandler(async (req, res) => {
  * @access  Private/Manager
  */
 const getAllRoomTypes = asyncHandler(async (req, res) => {
-  const types = await RoomType.find();
-  res.json(types);
+  const cacheKey = 'roomTypes:all';
+  
+  // Kiểm tra cache
+  const cached = getCache(cacheKey);
+  if (cached) {
+    return res.json(cached);
+  }
+  
+  // Nếu không có cache, query database
+  const roomTypes = await RoomType.find();
+  
+  // Lưu vào cache
+  setCache(cacheKey, roomTypes, 600); // 10 phút
+  
+  res.json(roomTypes);
 });
 
 /**

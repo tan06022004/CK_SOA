@@ -7,6 +7,7 @@ import HousekeepingDashboard from './pages/HousekeepingDashboard';
 import MaintenanceDashboard from './pages/MaintenanceDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -45,7 +46,8 @@ function App() {
   };
 
   return (
-    <Router>
+    <ErrorBoundary>
+          <Router>
       <Routes>
         <Route
           path="/login"
@@ -60,7 +62,8 @@ function App() {
         <Route
           path="/receptionist"
           element={
-            <ProtectedRoute isAuthenticated={currentUser?.role === 'receptionist'}>
+            <ProtectedRoute isAuthenticated={currentUser?.role === 'receptionist'} 
+            allowedRoles={['receptionist']}>
               <ReceptionistDashboard onLogout={handleLogout} />
             </ProtectedRoute>
           }
@@ -110,6 +113,7 @@ function App() {
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
+    </ErrorBoundary>
   );
 }
 

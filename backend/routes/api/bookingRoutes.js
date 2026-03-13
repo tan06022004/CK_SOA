@@ -1,4 +1,7 @@
 // routes/api/bookingRoutes.js
+const { createBookingRules } = require('../../validators/bookingValidators');
+const { validate } = require('../../middleware/validationMiddleware');
+
 const express = require('express');
 const router = express.Router();
 const {
@@ -16,7 +19,7 @@ const R_M = ['receptionist', 'manager'];
 const R_M_A = ['receptionist', 'manager', 'accountant'];
 
 router.route('/')
-    .post(protect, authorize(...R_M), createBooking)
+    .post(protect, authorize(...R_M),createBookingRules, validate, createBooking)
     .get(protect, authorize(...R_M_A), getAllBookings);
 
 router.route('/:bookingId')

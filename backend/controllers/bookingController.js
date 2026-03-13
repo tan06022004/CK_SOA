@@ -53,7 +53,21 @@ const createBooking = asyncHandler(async (req, res) => {
     room: roomId,
     status: { $in: ['confirmed', 'checked_in'] },
     $or: [
-      { checkInDate: { $lt: new Date(checkOutDate) }, checkOutDate: { $gt: new Date(checkInDate) } }
+      // Case 1: Check-in mới nằm trong khoảng booking cũ
+      {
+        checkInDate: { $lte: new Date(checkInDate) },
+        checkOutDate: { $gt: new Date(checkInDate) }
+      },
+      // Case 2: Check-out mới nằm trong khoảng booking cũ
+      {
+        checkInDate: { $lt: new Date(checkOutDate) },
+        checkOutDate: { $gte: new Date(checkOutDate) }
+      },
+      // Case 3: Booking mới bao trùm booking cũ
+      {
+        checkInDate: { $gte: new Date(checkInDate) },
+        checkOutDate: { $lte: new Date(checkOutDate) }
+      }
     ]
   });
   if (conflict) {
@@ -104,12 +118,30 @@ const getAllBookings = asyncHandler(async (req, res) => {
   if (req.query.fromDate) filter.checkInDate = { ...filter.checkInDate, $gte: new Date(req.query.fromDate) };
   if (req.query.toDate) filter.checkOutDate = { ...filter.checkOutDate, $lte: new Date(req.query.toDate) };
 
+  // Pagination
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
   const bookings = await Booking.find(filter)
     .populate('guest', 'fullName phoneNumber')
     .populate('room', 'roomNumber')
     .populate('createdBy', 'name')
-    .sort('-checkInDate');
-  res.json(bookings);
+    .sort('-checkInDate')
+    .skip(skip)
+    .limit(limit);
+
+  const total = await Booking.countDocuments(filter);
+
+  res.json({
+    bookings,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit)
+    }
+  });
 });
 
 /**

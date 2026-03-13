@@ -5,7 +5,7 @@ const roomTypeSchema = new mongoose.Schema({
         type: String,
         required: true,
         unique: true,
-        default: () => `RT_${Date.now()}`
+        default: () => `RT_${Date.now()}${Math.random().toString(36).slice(2,8)}`
     },
     typeName: { 
         type: String, 

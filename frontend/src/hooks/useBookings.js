@@ -14,7 +14,7 @@ export const useBookings = () => {
     try {
       setIsLoading(true);
       const data = await bookingService.getAllBookings();
-      setBookings(data);
+      setBookings(data.booking ?? data);
       setError(null);
     } catch (err) {
       setError(err.message);

@@ -26,12 +26,22 @@ connectDB();
 const app = express();
 
 // CORS configuration
+if (!process.env.FRONTEND_URL) {
+  console.error('❌ FRONTEND_URL không được cấu hình trong .env');
+  process.exit(1);
+}
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL, // ← Bỏ fallback
   credentials: true
 }));
 
 app.use(express.json());
+
+const { apiLimiter } = require('./middleware/rateLimiter');
+
+// Áp dụng rate limiting cho tất cả API
+app.use('/api/', apiLimiter);
 
 // --- Định nghĩa các API Routes ---
 

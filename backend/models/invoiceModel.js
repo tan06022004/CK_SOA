@@ -5,7 +5,7 @@ const invoiceSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    default: () => `INV_${Date.now()}`
+    default: () => `INV_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   },
   totalAmount: { 
     type: Number, 
