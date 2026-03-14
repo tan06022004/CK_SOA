@@ -1,7 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const RoomType = require('../models/roomTypeModel');
 const Room = require('../models/roomModel');
-const { getCache, setCache } = require('../src/services/cacheService');
+const { getCache, setCache } = require('../services/cacheService');
 
 /**
  * @desc    Tạo loại phòng mới

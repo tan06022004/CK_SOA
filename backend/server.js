@@ -38,7 +38,7 @@ app.use(cors({
 
 app.use(express.json());
 
-const { apiLimiter } = require('./middleware/rateLimiter');
+const { apiLimiter } = require('./middleware/rateLimiters');
 
 // Áp dụng rate limiting cho tất cả API
 app.use('/api/', apiLimiter);

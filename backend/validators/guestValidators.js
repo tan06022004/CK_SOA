@@ -1,29 +1,35 @@
 const { body } = require('express-validator');
 
 const createGuestRules = [
-  body('fullName')
+   body('fullName')
     .notEmpty().withMessage('Họ và tên là bắt buộc')
-    .isMongoId().withMessage('Họ và tên không hợp lệ'),
+    .isString().withMessage('Họ và tên phải là chuỗi')
+    .trim(),
   
   body('phoneNumber')
     .notEmpty().withMessage('Số điện thoại là bắt buộc')
-    .isISO8601().withMessage('Số điện thoại không đúng format'),
-  
+    .matches(/^[0-9]{10,11}$/).withMessage('Số điện thoại phải có 10–11 chữ số'),
+
   body('email')
-    .notEmpty().withMessage('Email là bắt buộc')
-    .isISO8601().withMessage('Email không đúng format'),
+    .optional()
+    .isEmail().withMessage('Email không hợp lệ')
+    .normalizeEmail(),
 
   body('address')
-    .notEmpty().withMessage('Địa chỉ là bắt buộc')
-    .isISO8601().withMessage('Địa chỉ không đúng format'),
-
-  body('city')
-    .notEmpty().withMessage('Thành phố là bắt buộc')
-    .isISO8601().withMessage('Thành phố không đúng format'),
-
-  body('country')
-    .notEmpty().withMessage('Quốc gia là bắt buộc')
-    .isISO8601().withMessage('Quốc gia không đúng format')
+    .optional()
+    .isString().withMessage('Địa chỉ phải là chuỗi')
+    .trim()
 ];
 
-module.exports = { createGuestRules };
+const updateGuestRules = [
+  body('fullName')
+    .notEmpty().withMessage('Họ và tên là bắt buộc')
+    .isString().trim(),
+  body('phoneNumber')
+    .notEmpty().withMessage('Số điện thoại là bắt buộc')
+    .matches(/^[0-9]{10,11}$/).withMessage('Số điện thoại phải có 10–11 chữ số'),
+  body('email').optional().isEmail().normalizeEmail(),
+  body('address').optional().isString().trim()
+];
+
+module.exports = { createGuestRules, updateGuestRules };

@@ -57,7 +57,7 @@ const checkOut = asyncHandler(async (req, res) => {
   session.startTransaction();
 
   try {
-    const booking = await Booking.findById(bookingId);
+    const booking = await Booking.findById(bookingId).session(session);
     if (!booking) {
       res.status(404);
       throw new Error('Không tìm thấy booking');
@@ -68,25 +68,26 @@ const checkOut = asyncHandler(async (req, res) => {
     }
     
     // 1. Cập nhật trạng thái phòng thành 'dirty' (cần dọn)
-    await Room.findByIdAndUpdate(booking.room, { status: 'dirty' });
+    await Room.findByIdAndUpdate(booking.room, { status: 'dirty' }).session(session);
     
     // 2. Cập nhật trạng thái booking
     booking.status = 'checked_out';
     // booking.actualCheckOut = Date.now(); // (Nếu model có trường này)
     
     // 3. Tự động tạo hóa đơn (Theo logic file Doc)
-    let invoice = await Invoice.findOne({ booking: booking._id });
+    let invoice = await Invoice.findOne({ booking: booking._id }).session(session);
     if (!invoice) {
         invoice = await Invoice.create({
             booking: booking._id,
             totalAmount: booking.totalPrice,
             issueDate: Date.now(),
             paymentStatus: 'pending' // Khớp với invoiceModel
-        });
+        }, { session });
     }
     
-    await booking.save();
+    await booking.save({ session });
     
+    await session.commitTransaction();
     res.json({
         message: 'Check-out thành công, đã tạo hóa đơn.',
         booking,

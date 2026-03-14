@@ -1,4 +1,6 @@
 // routes/api/guestRoutes.js
+const { createGuestRules, updateGuestRules } = require('../../validators/guestValidators');
+const { validate } = require('../../middleware/validationMiddleware');
 const express = require('express');
 const router = express.Router();
 const {
@@ -14,10 +16,10 @@ router.use(protect, authorize('receptionist', 'manager'));
 
 router.route('/')
     .get(getAllGuests)
-    .post(createGuest);
+    .post(createGuestRules, validate, createGuest);
 
 router.route('/:guestId') // Khớp với param 'guestId' trong Doc
     .get(getGuestById)
-    .put(updateGuest); // Đổi sang PUT
+    .put(updateGuestRules, validate, updateGuest); // Đổi sang PUT
 
 module.exports = router;

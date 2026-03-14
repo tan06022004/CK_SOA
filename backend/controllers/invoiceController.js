@@ -37,11 +37,11 @@ const generateInvoiceForBooking = asyncHandler(async (req, res, next) => {
  */
 const getAllInvoices = asyncHandler(async (req, res, next) => {
   const filter = {};
-  if (req.query.status) filter.paymentStatus = req.query.status;
-  if (req.query.bookingId) filter.booking = req.query.bookingId;
-  // TODO: Thêm filter theo customerId (yêu cầu populate lồng nhau)
-  if (req.query.fromDate) filter.issueDate = { ...filter.issueDate, $gte: new Date(req.query.fromDate) };
-  if (req.query.toDate) filter.issueDate = { ...filter.issueDate, $lte: new Date(req.query.toDate) };
+  if (req.query.fromDate || req.query.toDate) {
+    filter.issueDate = {};
+    if (req.query.fromDate) filter.issueDate.$gte = new Date(req.query.fromDate);
+    if (req.query.toDate) filter.issueDate.$lte = new Date(req.query.toDate);
+  }
   
   const invoices = await Invoice.find(filter)
     .populate({

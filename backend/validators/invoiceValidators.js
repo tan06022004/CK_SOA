@@ -1,17 +1,15 @@
-const { body } = require('express-validator');
-
 const createInvoiceRules = [
   body('totalAmount')
     .notEmpty().withMessage('Tổng tiền là bắt buộc')
-    .isISO8601().withMessage('Tổng tiền không đúng format'),
+    .isFloat({ min: 0 }).withMessage('Tổng tiền phải là số không âm'),
 
   body('paymentStatus')
-    .notEmpty().withMessage('Trạng thái thanh toán là bắt buộc')
-    .isISO8601().withMessage('Trạng thái thanh toán không đúng format'),
+    .optional()
+    .isIn(['pending', 'paid', 'cancelled']).withMessage('Trạng thái thanh toán không hợp lệ'),
 
   body('paymentMethod')
-    .notEmpty().withMessage('Phương thức thanh toán là bắt buộc')
-    .isISO8601().withMessage('Phương thức thanh toán không đúng format'),
+    .optional()
+    .isIn(['cash', 'card', 'bank_transfer', 'online']).withMessage('Phương thức thanh toán không hợp lệ'),
 ];
 
 module.exports = { createInvoiceRules };

@@ -8,7 +8,8 @@ const roomSchema = new mongoose.Schema({
         unique: true 
     },
     floor: { 
-        type: String 
+        type: String,
+        required: true
     },
     status: {
         type: String,

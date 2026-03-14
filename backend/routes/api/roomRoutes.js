@@ -43,7 +43,7 @@ router.get('/:roomId', protect, getRoomById);
 router.put('/:roomId/status', protect, authorize('receptionist', 'housekeeper', 'maintenance'), updateRoomStatus);
 
 // Routes chỉ cho Quản lý
-router.post('/', protect, authorize('manager'), createRoom);
+router.post('/', protect, authorize('manager'), createRoomRules, validate, createRoom);
 router.put('/:roomId', protect, authorize('manager'), updateRoomInfo); // Cập nhật thông tin
 
 module.exports = router;
